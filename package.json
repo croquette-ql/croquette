@@ -1,0 +1,50 @@
+{
+  "private": true,
+  "name": "croquette",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "bootstrap": "lerna bootstrap",
+    "clean": "rimraf \"packages/**/lib\"",
+    "build": "tsc -b tsconfig.build.json",
+    "prettier": "prettier \"*.{js,json,yml,yaml,md}\" \"packages/**/*\"",
+    "format": "yarn prettier --write",
+    "format:check": "yarn prettier --check",
+    "eslint": "eslint \"packages/**/*.ts\"",
+    "lint": "yarn format:check && yarn eslint",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/croquette-ql/croquette.git"
+  },
+  "keywords": [],
+  "author": "Quramy",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/croquette-ql/croquette/issues"
+  },
+  "homepage": "https://github.com/croquette-ql/croquette#readme",
+  "workspaces": [
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.11.1",
+    "@typescript-eslint/parser": "^4.11.1",
+    "eslint": "^7.16.0",
+    "eslint-config-prettier": "^7.1.0",
+    "husky": "^4.3.6",
+    "lerna": "^3.22.1",
+    "prettier": "^2.2.1",
+    "pretty-quick": "^3.1.0",
+    "rimraf": "^3.0.2",
+    "typescript": "^4.1.3",
+    "typescript-eslint-language-service": "^4.1.3"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "pretty-quick --staged"
+    }
+  }
+}
