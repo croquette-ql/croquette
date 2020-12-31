@@ -13,6 +13,8 @@ type NormalizedDataValue = NormalizedDataAtom | ReadonlyArray<NormalizedDataAtom
 type NormalizedDataRecord = { __typename: string } & Record<string, NormalizedDataValue>;
 type NormalizedData = Record<string, NormalizedDataRecord>;
 
+type NodePath = (string | number)[];
+
 export type NodeCacheCreateOptions = {
   initialData?: {
     operationResults: Record<string, string>;
@@ -23,7 +25,7 @@ export type NodeCacheCreateOptions = {
 
 export type CacheResult = {
   data: any;
-  missingDataLocations: string[];
+  missingDataLocations: NodePath;
 };
 
 function isNodeReference(x: any): x is NodeReference {
@@ -79,47 +81,11 @@ export class NodeCache {
     }
     const queryAstNode = findQueryOperationASTNode(query);
     const fragmentMap = getFragmentDefinitionMap(query);
-    const missingDataLocations: string[] = [];
+    const missingDataLocations: NodePath = [];
 
     const record = this._normalizedData[operationResultKey];
     const selectionSet = queryAstNode.selectionSet;
-    const getSelectionData = (selectionSet: SelectionSetNode, targetRecord: any) => {
-      let ret: any = {};
-      selectionSet.selections.forEach(selection => {
-        if (selection.kind === 'Field') {
-          const value = targetRecord[selection.name.value];
-          if (selection.selectionSet) {
-            if (isNodeReference(value)) {
-              const nextRecord = this._normalizedData[`${value.type}:${value.id}`];
-              ret[selection.name.value] = getSelectionData(selection.selectionSet, nextRecord);
-            } else if (Array.isArray(value)) {
-              ret[selection.name.value] = value.map(v => {
-                if (isNodeReference(v)) {
-                  const nextRecord = this._normalizedData[`${v.type}:${v.id}`];
-                  return getSelectionData(selection.selectionSet!, nextRecord);
-                } else {
-                  throw new Error('Illegal selection');
-                }
-              });
-            } else {
-              throw new Error('Illegal selection');
-            }
-          } else if (typeof value !== 'undefined') {
-            ret[selection.name.value] = value;
-          } else {
-            missingDataLocations.push(selection.name.value);
-          }
-        } else if (selection.kind === 'FragmentSpread') {
-          const fragmentDef = fragmentMap.get(selection.name.value);
-          if (!fragmentDef) {
-            throw new Error(`cannot find fragment definition for ${selection.name.value}`);
-          }
-          ret = { ...ret, ...getSelectionData(fragmentDef.selectionSet, targetRecord) };
-        }
-      });
-      return ret;
-    };
-    const data = getSelectionData(selectionSet, record);
+    const data = this._getSelectionData(selectionSet, record, fragmentMap, missingDataLocations);
 
     if (missingDataLocations.length > 0) {
       return {
@@ -138,56 +104,129 @@ export class NodeCache {
     const operationId = this._operationIdGenerator.getOperationId({ query, variables });
     const queryAstNode = findQueryOperationASTNode(query);
     const fragmentMap = getFragmentDefinitionMap(query);
-    const writeSelectionData = (selectionSet: SelectionSetNode, targetObject: any, location: (string | number)[]) => {
-      const typename = targetObject.__typename;
-      if (!typename) {
-        return null;
-      }
-      const objectId = targetObject.id ?? [operationId, ...location].join('/');
-      const id = `${typename}:${objectId}`;
-      let base: NormalizedDataRecord;
-      if (this._normalizedData[id]) {
-        base = this._normalizedData[id];
-      } else {
-        base = {
-          __typename: typename,
-        };
-        this._normalizedData[id] = base;
-      }
-      selectionSet.selections.forEach(selection => {
-        if (selection.kind === 'Field') {
-          const fieldName = selection.name.value;
-          const value = targetObject[fieldName];
-          if (selection.selectionSet) {
-            if (Array.isArray(value)) {
-              base[fieldName] = value.map((v, i) => {
-                return writeSelectionData(selection.selectionSet!, v, [...location, fieldName, i]);
-              });
-            } else if (value != null) {
-              base[fieldName] = writeSelectionData(selection.selectionSet, value, [...location, fieldName]);
-            }
-          } else {
-            base[fieldName] = value;
-          }
-        } else if (selection.kind === 'FragmentSpread') {
-          const fragmentDef = fragmentMap.get(selection.name.value);
-          if (!fragmentDef) {
-            throw new Error(`cannot find fragment definition for ${selection.name.value}`);
-          }
-          writeSelectionData(fragmentDef.selectionSet, targetObject, location);
-        }
-      });
-      const ref: NodeReference = {
-        __ref: true,
-        id: objectId,
-        type: typename,
-      };
-      return ref;
-    };
     const selectionSet = queryAstNode.selectionSet;
-    const queryRef = writeSelectionData(selectionSet, data, []);
+    const queryRef = this._writeSelectionData(operationId, selectionSet, data, [], fragmentMap);
     if (queryRef) {
       this._operationResults[operationId] = `${queryRef.type}:${queryRef.id}`;
     }
+  }
+
+  private _getSelectionData(
+    selectionSet: SelectionSetNode,
+    targetRecord: any,
+    fragmentMap: Map<string, FragmentDefinitionNode>,
+    missingDataLocations: NodePath,
+  ) {
+    let ret: any = {};
+    selectionSet.selections.forEach(selection => {
+      if (selection.kind === 'Field') {
+        const value = targetRecord[selection.name.value];
+        if (selection.selectionSet) {
+          if (isNodeReference(value)) {
+            const nextRecord = this._normalizedData[`${value.type}:${value.id}`];
+            ret[selection.name.value] = this._getSelectionData(
+              selection.selectionSet,
+              nextRecord,
+              fragmentMap,
+              missingDataLocations,
+            );
+          } else if (Array.isArray(value)) {
+            ret[selection.name.value] = value.map(v => {
+              if (isNodeReference(v)) {
+                const nextRecord = this._normalizedData[`${v.type}:${v.id}`];
+                return this._getSelectionData(selection.selectionSet!, nextRecord, fragmentMap, missingDataLocations);
+              } else {
+                throw new Error('Illegal selection');
+              }
+            });
+          } else {
+            throw new Error('Illegal selection');
+          }
+        } else if (typeof value !== 'undefined') {
+          ret[selection.name.value] = value;
+        } else {
+          missingDataLocations.push(selection.name.value);
+        }
+      } else if (selection.kind === 'FragmentSpread') {
+        const fragmentDef = fragmentMap.get(selection.name.value);
+        if (!fragmentDef) {
+          throw new Error(`cannot find fragment definition for ${selection.name.value}`);
+        }
+        ret = {
+          ...ret,
+          ...this._getSelectionData(fragmentDef.selectionSet, targetRecord, fragmentMap, missingDataLocations),
+        };
+      } else if (selection.kind === 'InlineFragment') {
+        // TBD
+      }
+    });
+    return ret;
+  }
+
+  private _writeSelectionData(
+    operationId: string,
+    selectionSet: SelectionSetNode,
+    targetObject: any,
+    location: NodePath,
+    fragmentMap: Map<string, FragmentDefinitionNode>,
+  ) {
+    const typename = targetObject.__typename;
+    if (!typename) {
+      return null;
+    }
+    const objectId = targetObject.id ?? [operationId, ...location].join('/');
+    const id = `${typename}:${objectId}`;
+    let base: NormalizedDataRecord;
+    if (this._normalizedData[id]) {
+      base = this._normalizedData[id];
+    } else {
+      base = {
+        __typename: typename,
+      };
+      this._normalizedData[id] = base;
+    }
+    selectionSet.selections.forEach(selection => {
+      if (selection.kind === 'Field') {
+        const fieldName = selection.name.value;
+        const value = targetObject[fieldName];
+        if (selection.selectionSet) {
+          if (Array.isArray(value)) {
+            base[fieldName] = value.map((v, i) => {
+              return this._writeSelectionData(
+                operationId,
+                selection.selectionSet!,
+                v,
+                [...location, fieldName, i],
+                fragmentMap,
+              );
+            });
+          } else if (value != null) {
+            base[fieldName] = this._writeSelectionData(
+              operationId,
+              selection.selectionSet,
+              value,
+              [...location, fieldName],
+              fragmentMap,
+            );
+          }
+        } else {
+          base[fieldName] = value;
+        }
+      } else if (selection.kind === 'FragmentSpread') {
+        const fragmentDef = fragmentMap.get(selection.name.value);
+        if (!fragmentDef) {
+          throw new Error(`cannot find fragment definition for ${selection.name.value}`);
+        }
+        this._writeSelectionData(operationId, fragmentDef.selectionSet, targetObject, location, fragmentMap);
+      } else if (selection.kind === 'InlineFragment') {
+        // TBD
+      }
+    });
+    const ref: NodeReference = {
+      __ref: true,
+      id: objectId,
+      type: typename,
+    };
+    return ref;
   }
 }
