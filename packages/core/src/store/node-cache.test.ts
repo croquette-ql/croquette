@@ -117,6 +117,36 @@ describe(NodeCache, () => {
           missingDataLocations: [],
         });
       });
+
+      it('should return data when query has fargment spread', () => {
+        const cache = new NodeCache({
+          initialData: {
+            operationResults: {
+              'MyQuery/{}': 'Query:0',
+            },
+            normalizedData: {
+              'Query:0': {
+                __typename: 'Query',
+                hello: 'world',
+              },
+            },
+          },
+        });
+        const query = `
+          fragment MyFragment on Query {
+            hello
+          }
+          query MyQuery {
+            ...MyFragment
+          }
+        `;
+        expect(cache.readQuery({ query: parse(query), variables: {} })).toStrictEqual({
+          data: {
+            hello: 'world',
+          },
+          missingDataLocations: [],
+        });
+      });
     });
   });
 });

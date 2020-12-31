@@ -1,4 +1,4 @@
-import type { DocumentNode, OperationDefinitionNode, SelectionSetNode } from 'graphql';
+import type { DocumentNode, OperationDefinitionNode, SelectionSetNode, FragmentDefinitionNode } from 'graphql';
 import { OperationIdGenerator } from '../types';
 import { DefaultOperationIdGenerator } from './operation-id';
 
@@ -40,6 +40,16 @@ function findQueryOperationASTNode(ast: DocumentNode) {
   return hit as OperationDefinitionNode;
 }
 
+function getFragmentDefinitionMap(ast: DocumentNode) {
+  const map = new Map<string, FragmentDefinitionNode>();
+  ast.definitions.forEach(def => {
+    if (def.kind === 'FragmentDefinition') {
+      map.set(def.name.value, def);
+    }
+  });
+  return map;
+}
+
 export class NodeCache {
   private _normalizedData: NormalizedData;
   private _operationResults: Record<string, string>;
@@ -61,12 +71,13 @@ export class NodeCache {
       };
     }
     const queryAstNode = findQueryOperationASTNode(query);
+    const fragmentMap = getFragmentDefinitionMap(query);
     const missingDataLocations: string[] = [];
 
     const record = this._normalizedData[operationResultKey];
     const selectionSet = queryAstNode.selectionSet;
     const getSelectionData = (selectionSet: SelectionSetNode, targetRecord: any) => {
-      const ret: any = {};
+      let ret: any = {};
       selectionSet.selections.forEach(selection => {
         if (selection.kind === 'Field') {
           const value = targetRecord[selection.name.value];
@@ -91,6 +102,12 @@ export class NodeCache {
           } else {
             missingDataLocations.push(selection.name.value);
           }
+        } else if (selection.kind === 'FragmentSpread') {
+          const fragmentDef = fragmentMap.get(selection.name.value);
+          if (!fragmentDef) {
+            throw new Error(`cannot find fragment definition for ${selection.name.value}`);
+          }
+          ret = { ...ret, ...getSelectionData(fragmentDef.selectionSet, targetRecord) };
         }
       });
       return ret;
