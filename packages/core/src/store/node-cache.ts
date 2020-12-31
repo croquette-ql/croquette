@@ -61,6 +61,13 @@ export class NodeCache {
     this._operationIdGenerator = options.idGenerator ?? new DefaultOperationIdGenerator();
   }
 
+  serialize() {
+    return {
+      normalizedData: this._normalizedData,
+      operationResults: this._operationResults,
+    };
+  }
+
   readQuery({ query, variables }: { query: DocumentNode; variables: any }) {
     const operationId = this._operationIdGenerator.getOperationId({ query, variables });
     const operationResultKey = this._operationResults[operationId];
@@ -124,6 +131,63 @@ export class NodeCache {
         data,
         missingDataLocations: [],
       };
+    }
+  }
+
+  writeQuery({ query, variables }: { query: DocumentNode; variables: any }, data: any) {
+    const operationId = this._operationIdGenerator.getOperationId({ query, variables });
+    const queryAstNode = findQueryOperationASTNode(query);
+    const fragmentMap = getFragmentDefinitionMap(query);
+    const writeSelectionData = (selectionSet: SelectionSetNode, targetObject: any, location: (string | number)[]) => {
+      const typename = targetObject.__typename;
+      if (!typename) {
+        return null;
+      }
+      const objectId = targetObject.id ?? [operationId, ...location].join('/');
+      const id = `${typename}:${objectId}`;
+      let base: NormalizedDataRecord;
+      if (this._normalizedData[id]) {
+        base = this._normalizedData[id];
+      } else {
+        base = {
+          __typename: typename,
+        };
+        this._normalizedData[id] = base;
+      }
+      selectionSet.selections.forEach(selection => {
+        if (selection.kind === 'Field') {
+          const fieldName = selection.name.value;
+          const value = targetObject[fieldName];
+          if (selection.selectionSet) {
+            if (Array.isArray(value)) {
+              base[fieldName] = value.map((v, i) => {
+                return writeSelectionData(selection.selectionSet!, v, [...location, fieldName, i]);
+              });
+            } else if (value != null) {
+              base[fieldName] = writeSelectionData(selection.selectionSet, value, [...location, fieldName]);
+            }
+          } else {
+            base[fieldName] = value;
+          }
+        } else if (selection.kind === 'FragmentSpread') {
+          const fragmentDef = fragmentMap.get(selection.name.value);
+          if (!fragmentDef) {
+            throw new Error(`cannot find fragment definition for ${selection.name.value}`);
+          }
+          writeSelectionData(fragmentDef.selectionSet, targetObject, location);
+        }
+      });
+      const ref: NodeReference = {
+        __ref: true,
+        id: objectId,
+        type: typename,
+      };
+      return ref;
+    };
+    const selectionSet = queryAstNode.selectionSet;
+    const queryRef = writeSelectionData(selectionSet, data, []);
+    if (queryRef) {
+      this._operationResults[operationId] = `${queryRef.type}:${queryRef.id}`;
     }
   }
 }

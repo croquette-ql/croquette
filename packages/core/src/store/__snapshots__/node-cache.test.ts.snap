@@ -1,0 +1,111 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`NodeCache selection pattern writeQuery should write data when query has array selection 1`] = `
+Object {
+  "normalizedData": Object {
+    "Node:MyQuery/{}/nodes/0": Object {
+      "__typename": "Node",
+      "name": "hoge",
+    },
+    "Node:MyQuery/{}/nodes/1": Object {
+      "__typename": "Node",
+      "name": "fuga",
+    },
+    "Query:MyQuery/{}": Object {
+      "__typename": "Query",
+      "nodes": Array [
+        Object {
+          "__ref": true,
+          "id": "MyQuery/{}/nodes/0",
+          "type": "Node",
+        },
+        Object {
+          "__ref": true,
+          "id": "MyQuery/{}/nodes/1",
+          "type": "Node",
+        },
+      ],
+    },
+  },
+  "operationResults": Object {
+    "MyQuery/{}": "Query:MyQuery/{}",
+  },
+}
+`;
+
+exports[`NodeCache selection pattern writeQuery should write data when query has fragment spread 1`] = `
+Object {
+  "normalizedData": Object {
+    "Query:MyQuery/{}": Object {
+      "__typename": "Query",
+      "hello": "world",
+    },
+  },
+  "operationResults": Object {
+    "MyQuery/{}": "Query:MyQuery/{}",
+  },
+}
+`;
+
+exports[`NodeCache selection pattern writeQuery should write data when query has nested object selection 1`] = `
+Object {
+  "normalizedData": Object {
+    "Greeting:MyQuery/{}/greeting": Object {
+      "__typename": "Greeting",
+      "hello": "world",
+    },
+    "Query:MyQuery/{}": Object {
+      "__typename": "Query",
+      "greeting": Object {
+        "__ref": true,
+        "id": "MyQuery/{}/greeting",
+        "type": "Greeting",
+      },
+    },
+  },
+  "operationResults": Object {
+    "MyQuery/{}": "Query:MyQuery/{}",
+  },
+}
+`;
+
+exports[`NodeCache selection pattern writeQuery should write data when query has nested object selection with id field 1`] = `
+Object {
+  "normalizedData": Object {
+    "Greeting:0": Object {
+      "__typename": "Greeting",
+      "hello": "world",
+      "id": "0",
+    },
+    "Query:MyQuery/{}": Object {
+      "__typename": "Query",
+      "greeting": Object {
+        "__ref": true,
+        "id": "0",
+        "type": "Greeting",
+      },
+    },
+  },
+  "operationResults": Object {
+    "MyQuery/{}": "Query:MyQuery/{}",
+  },
+}
+`;
+
+exports[`NodeCache selection pattern writeQuery should write data with query 1`] = `
+Object {
+  "normalizedData": Object {
+    "Query:MyQuery/{}": Object {
+      "__typename": "Query",
+      "boolValue": false,
+      "floatValue": 1,
+      "intValue": 1,
+      "nullableValue": null,
+      "stringValue": "hello",
+    },
+  },
+  "operationResults": Object {
+    "MyQuery/{}": "Query:MyQuery/{}",
+  },
+}
+`;

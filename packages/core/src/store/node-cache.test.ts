@@ -148,5 +148,120 @@ describe(NodeCache, () => {
         });
       });
     });
+
+    describe(NodeCache.prototype.writeQuery, () => {
+      it('should write data with query', () => {
+        const cache = new NodeCache();
+        const query = `
+          query MyQuery {
+            stringValue
+            intValue
+            floatValue
+            boolValue
+            nullableValue
+          }
+        `;
+        cache.writeQuery(
+          { query: parse(query), variables: {} },
+          {
+            __typename: 'Query',
+            stringValue: 'hello',
+            intValue: 1,
+            floatValue: 1.0,
+            boolValue: false,
+            nullableValue: null,
+          },
+        );
+        expect(cache.serialize()).toMatchSnapshot();
+      });
+
+      it('should write data when query has nested object selection', () => {
+        const cache = new NodeCache();
+        const query = `
+          query MyQuery {
+            greeting {
+              hello
+            }
+          }
+        `;
+        cache.writeQuery(
+          { query: parse(query), variables: {} },
+          {
+            __typename: 'Query',
+            greeting: {
+              __typename: 'Greeting',
+              hello: 'world',
+            },
+          },
+        );
+        expect(cache.serialize()).toMatchSnapshot();
+      });
+
+      it('should write data when query has nested object selection with id field', () => {
+        const cache = new NodeCache();
+        const query = `
+          query MyQuery {
+            greeting {
+              id
+              hello
+            }
+          }
+        `;
+        cache.writeQuery(
+          { query: parse(query), variables: {} },
+          {
+            __typename: 'Query',
+            greeting: {
+              __typename: 'Greeting',
+              id: '0',
+              hello: 'world',
+            },
+          },
+        );
+        expect(cache.serialize()).toMatchSnapshot();
+      });
+
+      it('should write data when query has array selection', () => {
+        const cache = new NodeCache();
+        const query = `
+          query MyQuery {
+            nodes {
+              name
+            }
+          }
+        `;
+        cache.writeQuery(
+          { query: parse(query), variables: {} },
+          {
+            __typename: 'Query',
+            nodes: [
+              { __typename: 'Node', name: 'hoge' },
+              { __typename: 'Node', name: 'fuga' },
+            ],
+          },
+        );
+        expect(cache.serialize()).toMatchSnapshot();
+      });
+
+      it('should write data when query has fragment spread', () => {
+        const cache = new NodeCache();
+        const query = `
+          fragment MyFragment on Query {
+            hello
+          }
+          query MyQuery {
+            ...MyFragment
+          }
+        `;
+        cache.writeQuery(
+          { query: parse(query), variables: {} },
+          {
+            __typename: 'Query',
+            hello: 'world',
+          },
+        );
+        expect(cache.serialize()).toMatchSnapshot();
+      });
+    });
   });
 });
