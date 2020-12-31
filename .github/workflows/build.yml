@@ -27,3 +27,8 @@ jobs:
           yarn lint
         env:
           CI: true
+      - name: Unit testing
+        run: |
+          yarn test
+        env:
+          CI: true

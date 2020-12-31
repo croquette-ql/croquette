@@ -13,7 +13,7 @@
     "format:check": "yarn prettier --check",
     "eslint": "eslint \"packages/**/*.ts\"",
     "lint": "yarn format:check && yarn eslint",
-    "test": "lerna exec test"
+    "test": "lerna run test --parallel"
   },
   "repository": {
     "type": "git",
