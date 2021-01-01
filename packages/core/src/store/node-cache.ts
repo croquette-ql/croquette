@@ -1,4 +1,5 @@
 import type { DocumentNode, OperationDefinitionNode, SelectionSetNode, FragmentDefinitionNode } from 'graphql';
+import { extractDefaultValues } from '@croquette/util';
 import { OperationIdGenerator } from '../types';
 import { DefaultOperationIdGenerator } from './operation-id';
 
@@ -14,6 +15,12 @@ type NormalizedDataRecord = { __typename: string } & Record<string, NormalizedDa
 type NormalizedData = Record<string, NormalizedDataRecord>;
 
 type NodePath = (string | number)[];
+
+type selectionVisitContext = {
+  readonly operationId: string;
+  readonly fragmentMap: Map<string, FragmentDefinitionNode>;
+  readonly mergedVariables: Record<string, any>;
+};
 
 export type NodeCacheCreateOptions = {
   initialData?: {
@@ -85,7 +92,12 @@ export class NodeCache {
 
     const record = this._normalizedData[operationResultKey];
     const selectionSet = queryAstNode.selectionSet;
-    const data = this._getSelectionData(selectionSet, record, fragmentMap, missingDataLocations);
+    const mergedVariables = { ...extractDefaultValues(queryAstNode), ...variables };
+    const data = this._getSelectionData(selectionSet, record, missingDataLocations, {
+      operationId,
+      fragmentMap,
+      mergedVariables,
+    });
 
     if (missingDataLocations.length > 0) {
       return {
@@ -105,7 +117,12 @@ export class NodeCache {
     const queryAstNode = findQueryOperationASTNode(query);
     const fragmentMap = getFragmentDefinitionMap(query);
     const selectionSet = queryAstNode.selectionSet;
-    const queryRef = this._writeSelectionData(operationId, selectionSet, data, [], fragmentMap);
+    const mergedVariables = { ...extractDefaultValues(queryAstNode), ...variables };
+    const queryRef = this._writeSelectionData(selectionSet, data, [], {
+      operationId,
+      fragmentMap,
+      mergedVariables,
+    });
     if (queryRef) {
       this._operationResults[operationId] = `${queryRef.type}:${queryRef.id}`;
     }
@@ -114,8 +131,8 @@ export class NodeCache {
   private _getSelectionData(
     selectionSet: SelectionSetNode,
     targetRecord: any,
-    fragmentMap: Map<string, FragmentDefinitionNode>,
     missingDataLocations: NodePath,
+    context: selectionVisitContext,
   ) {
     let ret: any = {};
     selectionSet.selections.forEach(selection => {
@@ -127,14 +144,14 @@ export class NodeCache {
             ret[selection.name.value] = this._getSelectionData(
               selection.selectionSet,
               nextRecord,
-              fragmentMap,
               missingDataLocations,
+              context,
             );
           } else if (Array.isArray(value)) {
             ret[selection.name.value] = value.map(v => {
               if (isNodeReference(v)) {
                 const nextRecord = this._normalizedData[`${v.type}:${v.id}`];
-                return this._getSelectionData(selection.selectionSet!, nextRecord, fragmentMap, missingDataLocations);
+                return this._getSelectionData(selection.selectionSet!, nextRecord, missingDataLocations, context);
               } else {
                 throw new Error('Illegal selection');
               }
@@ -148,13 +165,13 @@ export class NodeCache {
           missingDataLocations.push(selection.name.value);
         }
       } else if (selection.kind === 'FragmentSpread') {
-        const fragmentDef = fragmentMap.get(selection.name.value);
+        const fragmentDef = context.fragmentMap.get(selection.name.value);
         if (!fragmentDef) {
           throw new Error(`cannot find fragment definition for ${selection.name.value}`);
         }
         ret = {
           ...ret,
-          ...this._getSelectionData(fragmentDef.selectionSet, targetRecord, fragmentMap, missingDataLocations),
+          ...this._getSelectionData(fragmentDef.selectionSet, targetRecord, missingDataLocations, context),
         };
       } else if (selection.kind === 'InlineFragment') {
         // TBD
@@ -164,17 +181,16 @@ export class NodeCache {
   }
 
   private _writeSelectionData(
-    operationId: string,
     selectionSet: SelectionSetNode,
     targetObject: any,
     location: NodePath,
-    fragmentMap: Map<string, FragmentDefinitionNode>,
+    context: selectionVisitContext,
   ) {
     const typename = targetObject.__typename;
     if (!typename) {
       return null;
     }
-    const objectId = targetObject.id ?? [operationId, ...location].join('/');
+    const objectId = targetObject.id ?? [context.operationId, ...location].join('/');
     const id = `${typename}:${objectId}`;
     let base: NormalizedDataRecord;
     if (this._normalizedData[id]) {
@@ -192,32 +208,25 @@ export class NodeCache {
         if (selection.selectionSet) {
           if (Array.isArray(value)) {
             base[fieldName] = value.map((v, i) => {
-              return this._writeSelectionData(
-                operationId,
-                selection.selectionSet!,
-                v,
-                [...location, fieldName, i],
-                fragmentMap,
-              );
+              return this._writeSelectionData(selection.selectionSet!, v, [...location, fieldName, i], context);
             });
           } else if (value != null) {
             base[fieldName] = this._writeSelectionData(
-              operationId,
               selection.selectionSet,
               value,
               [...location, fieldName],
-              fragmentMap,
+              context,
             );
           }
         } else {
           base[fieldName] = value;
         }
       } else if (selection.kind === 'FragmentSpread') {
-        const fragmentDef = fragmentMap.get(selection.name.value);
+        const fragmentDef = context.fragmentMap.get(selection.name.value);
         if (!fragmentDef) {
           throw new Error(`cannot find fragment definition for ${selection.name.value}`);
         }
-        this._writeSelectionData(operationId, fragmentDef.selectionSet, targetObject, location, fragmentMap);
+        this._writeSelectionData(fragmentDef.selectionSet, targetObject, location, context);
       } else if (selection.kind === 'InlineFragment') {
         // TBD
       }
