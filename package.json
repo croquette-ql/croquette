@@ -7,7 +7,10 @@
   "scripts": {
     "bootstrap": "lerna bootstrap",
     "clean": "rimraf \"packages/**/lib\"",
-    "build": "tsc -b tsconfig.build.json",
+    "build:cjs": "tsc -b tsconfig.build.json",
+    "build:esm": "tsc -b tsconfig.build.esm.json",
+    "compile": "yarn build:cjs",
+    "build": "yarn build:cjs && yarn build:esm",
     "prettier": "prettier \"*.{js,json,yml,yaml,md}\" \"packages/**/*\"",
     "format": "yarn prettier --write",
     "format:check": "yarn prettier --check",

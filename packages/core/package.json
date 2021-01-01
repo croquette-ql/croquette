@@ -2,13 +2,24 @@
   "name": "@croquette/core",
   "version": "1.0.0-alpha.0",
   "description": "",
-  "main": "index.js",
+  "main": "./lib/cjs/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    "import": "./lib/esm/index.js",
+    "require": "./lib/cjs/index.js"
+  },
   "scripts": {
     "test": "jest"
   },
   "keywords": [],
   "author": "Quramy",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/croquette-ql/croquette.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/croquette-ql/croquette",
   "peerDependencies": {
     "graphql": "^15.4.0"
   },
