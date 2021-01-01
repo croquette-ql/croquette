@@ -23,6 +23,9 @@
   "peerDependencies": {
     "graphql": "^15.4.0"
   },
+  "dependencies": {
+    "@croquette/util": "^1.0.0-alpha.0"
+  },
   "devDependencies": {
     "@types/jest": "^26.0.19",
     "graphql": "15.4.0-experimental-stream-defer.1",
