@@ -264,4 +264,48 @@ describe(NodeCache, () => {
       });
     });
   });
+
+  describe('built-in directives', () => {
+    describe('@skip/@include', () => {
+      it('should filter data to store using @skip/@include condition', () => {
+        const cache = new NodeCache();
+        const query = `
+          query MyQuery {
+            f0 
+            f1 @skip(if: true)
+            f2 @skip(if: false)
+            f3 @include(if: true)
+            f4 @include(if: false)
+            f5 @skip(if: true) @include(if: true)
+            f6 @skip(if: false) @include(if: true)
+            f7 @skip(if: true) @include(if: false)
+            f8 @skip(if: false) @include(if: false)
+          }
+        `;
+        cache.writeQuery(
+          { query: parse(query), variables: {} },
+          {
+            __typename: 'Query',
+            id: '0',
+            f0: 100,
+            f1: 100,
+            f2: 100,
+            f3: 100,
+            f4: 100,
+            f5: 100,
+            f6: 100,
+            f7: 100,
+            f8: 100,
+          },
+        );
+        expect(Object.keys(cache.serialize().normalizedData['Query:0'])).toStrictEqual([
+          '__typename',
+          'f0',
+          'f2',
+          'f3',
+          'f6',
+        ]);
+      });
+    });
+  });
 });

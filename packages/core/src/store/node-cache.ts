@@ -1,5 +1,11 @@
-import type { DocumentNode, OperationDefinitionNode, SelectionSetNode, FragmentDefinitionNode } from 'graphql';
-import { extractDefaultValues } from '@croquette/util';
+import type {
+  DocumentNode,
+  OperationDefinitionNode,
+  SelectionSetNode,
+  FragmentDefinitionNode,
+  DirectiveNode,
+} from 'graphql';
+import { extractDefaultValues, resolveValueNode } from '@croquette/util';
 import { OperationIdGenerator } from '../types';
 import { DefaultOperationIdGenerator } from './operation-id';
 
@@ -136,6 +142,9 @@ export class NodeCache {
   ) {
     let ret: any = {};
     selectionSet.selections.forEach(selection => {
+      if (this._shouldBeSkipped(selection.directives, context)) {
+        return;
+      }
       if (selection.kind === 'Field') {
         const value = targetRecord[selection.name.value];
         if (selection.selectionSet) {
@@ -202,6 +211,9 @@ export class NodeCache {
       this._normalizedData[id] = base;
     }
     selectionSet.selections.forEach(selection => {
+      if (this._shouldBeSkipped(selection.directives, context)) {
+        return;
+      }
       if (selection.kind === 'Field') {
         const fieldName = selection.name.value;
         const value = targetObject[fieldName];
@@ -237,5 +249,28 @@ export class NodeCache {
       type: typename,
     };
     return ref;
+  }
+
+  private _shouldBeSkipped(directives: ReadonlyArray<DirectiveNode> | undefined, context: selectionVisitContext) {
+    if (!directives) return false;
+    const getIf = (directieNode: DirectiveNode) => {
+      const hit = directieNode?.arguments?.find(arg => arg.name.value === 'if');
+      if (!hit) return false;
+      return resolveValueNode(hit.value, context.mergedVariables);
+    };
+    const skipDirective = directives.find(d => d.name.value === 'skip');
+    const includeDirective = directives.find(d => d.name.value === 'include');
+    if (!skipDirective && !includeDirective) {
+      return false;
+    } else if (skipDirective && !includeDirective) {
+      return getIf(skipDirective) === true;
+    } else if (!skipDirective && includeDirective) {
+      return getIf(includeDirective) === false;
+    } else if (skipDirective && includeDirective) {
+      // https://spec.graphql.org/June2018/#sec--include
+      return !(getIf(skipDirective) === false && getIf(includeDirective) === true);
+    } else {
+      return false as never;
+    }
   }
 }
