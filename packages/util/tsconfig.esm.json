@@ -1,11 +1,10 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "declaration": true,
-    "declarationDir": "lib/types",
+    "module": "esnext",
     "rootDir": "src",
-    "outDir": "lib/cjs"
+    "outDir": "lib/esm"
   },
-  "references": [{ "path": "../util" }],
+  "references": [],
   "exclude": ["node_modules", "lib"]
 }

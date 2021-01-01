@@ -5,6 +5,6 @@
     "rootDir": "src",
     "outDir": "lib/esm"
   },
-  "references": [],
+  "references": [{ "path": "../util/tsconfig.esm.json" }],
   "exclude": ["node_modules", "lib"]
 }

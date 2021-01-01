@@ -6,6 +6,6 @@
     "rootDir": "src",
     "outDir": "lib/cjs"
   },
-  "references": [{ "path": "../util" }],
+  "references": [],
   "exclude": ["node_modules", "lib"]
 }
